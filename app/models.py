@@ -43,11 +43,11 @@ class Tool:
         cursor.close()
 
     @staticmethod
-    def update_stock(nama_barang, jumlah_diambil, lemari, lokasi, username):
+    def update_stock(nama_barang, jumlah, lemari, lokasi, username):
         db = get_db()
         cursor = db.cursor()
         
-        print(f'[update_stock] Ambil: {jumlah_diambil} x {nama_barang} dari {lemari}/{lokasi}')
+        print(f'[update_stock] Ambil: {jumlah} x {nama_barang} dari {lemari}/{lokasi}')
 
         cursor.execute(
             "SELECT jumlah FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s",
@@ -62,11 +62,11 @@ class Tool:
             return {"message": "Barang tidak ditemukan!"}, 404
 
         stok_tersisa = barang[0]
-        if stok_tersisa < jumlah_diambil:
-            print(f'[update_stock] Stok tidak mencukupi! Tersisa: {stok_tersisa}, diminta: {jumlah_diambil}')
+        if stok_tersisa < jumlah:
+            print(f'[update_stock] Stok tidak mencukupi! Tersisa: {stok_tersisa}, diminta: {jumlah}')
             return {"message": "Stok tidak mencukupi!"}, 400
 
-        jumlah_sisa = stok_tersisa - jumlah_diambil
+        jumlah_sisa = stok_tersisa - jumlah
 
         cursor.execute(
             "UPDATE barang SET jumlah = %s WHERE nama_barang = %s AND lemari = %s AND lokasi = %s",
@@ -75,7 +75,7 @@ class Tool:
 
         cursor.execute(
             "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
-            (nama_barang, jumlah_diambil, lemari, lokasi, "Ambil Barang", username)
+            (nama_barang, jumlah, lemari, lokasi, "Ambil Barang", username)
         )
 
         db.commit()

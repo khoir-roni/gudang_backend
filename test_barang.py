@@ -78,7 +78,7 @@ def test_update_barang():
     
     payload = {
         "nama_barang": "coba",
-        "jumlah_diambil": 1,
+        "jumlah": 1,
         "lemari": "A1",
         "lokasi": "coba",
         "username": "admin"

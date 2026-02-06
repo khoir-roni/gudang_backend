@@ -41,14 +41,14 @@ def update_barang():
     
     try:
         # Validasi field yang diperlukan
-        required_fields = ['nama_barang', 'jumlah_diambil', 'lemari', 'lokasi', 'username']
+        required_fields = ['nama_barang', 'jumlah', 'lemari', 'lokasi', 'username']
         for field in required_fields:
             if field not in data:
                 return jsonify({"message": f"Field '{field}' diperlukan"}), 400
         
         result = Tool.update_stock(
             nama_barang=data['nama_barang'],
-            jumlah_diambil=data['jumlah_diambil'],
+            jumlah=data['jumlah'],
             lemari=data['lemari'],
             lokasi=data['lokasi'],
             username=data['username']
