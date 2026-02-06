@@ -36,6 +36,9 @@ def get_barang():
 @main.route('/update_barang', methods=['POST'])
 def update_barang():
     data = request.get_json()
+    print('==== update_barang DEBUG ====')
+    print(f'Request data: {data}')
+    
     try:
         # Validasi field yang diperlukan
         required_fields = ['nama_barang', 'jumlah_diambil', 'lemari', 'lokasi', 'username']
@@ -50,10 +53,13 @@ def update_barang():
             lokasi=data['lokasi'],
             username=data['username']
         )
+        print(f'Result: {result}')
+        
         if isinstance(result, tuple):  # Jika ada error message dan status
             return jsonify(result[0]), result[1]
         return jsonify(result)
     except Exception as e:
+        print(f'Error in update_barang: {str(e)}')
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
 @main.route('/delete_barang', methods=['DELETE'])

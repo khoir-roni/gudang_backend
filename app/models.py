@@ -46,18 +46,24 @@ class Tool:
     def update_stock(nama_barang, jumlah_diambil, lemari, lokasi, username):
         db = get_db()
         cursor = db.cursor()
+        
+        print(f'[update_stock] Ambil: {jumlah_diambil} x {nama_barang} dari {lemari}/{lokasi}')
 
         cursor.execute(
             "SELECT jumlah FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s",
             (nama_barang, lemari, lokasi)
         )
         barang = cursor.fetchone()
+        
+        print(f'[update_stock] Barang found: {barang}')
 
         if not barang:
+            print(f'[update_stock] Barang tidak ditemukan!')
             return {"message": "Barang tidak ditemukan!"}, 404
 
         stok_tersisa = barang[0]
         if stok_tersisa < jumlah_diambil:
+            print(f'[update_stock] Stok tidak mencukupi! Tersisa: {stok_tersisa}, diminta: {jumlah_diambil}')
             return {"message": "Stok tidak mencukupi!"}, 400
 
         jumlah_sisa = stok_tersisa - jumlah_diambil
@@ -74,6 +80,7 @@ class Tool:
 
         db.commit()
         cursor.close()
+        print(f'[update_stock] Success! Sisa stok: {jumlah_sisa}')
         return {"message": "Barang berhasil diambil!", "stok_tersisa": jumlah_sisa}
 
     @staticmethod
