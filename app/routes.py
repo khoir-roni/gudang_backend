@@ -62,6 +62,23 @@ def update_barang():
         print(f'Error in update_barang: {str(e)}')
         return jsonify({"message": f"Error: {str(e)}"}), 500
 
+@main.route('/edit_barang', methods=['POST'])
+def edit_barang():
+    data = request.get_json()
+    try:
+        result = Tool.edit(
+            id=data.get('id'),
+            nama_barang=data['nama_barang'],
+            jumlah_baru=data['jumlah'],
+            lemari=data['lemari'],
+            lokasi=data['lokasi'],
+            username=data['username']
+        )
+        if isinstance(result, tuple): return jsonify(result[0]), result[1]
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"message": f"Error: {str(e)}"}), 500
+
 @main.route('/delete_barang', methods=['DELETE'])
 def delete_barang():
     data = request.get_json()

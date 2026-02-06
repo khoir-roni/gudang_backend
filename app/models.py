@@ -84,6 +84,55 @@ class Tool:
         return {"message": "Barang berhasil diambil!", "stok_tersisa": jumlah_sisa}
 
     @staticmethod
+    def edit(id, nama_barang, jumlah_baru, lemari, lokasi, username):
+        db = get_db()
+        cursor = db.cursor()
+
+        # 1. Ambil data lama
+        cursor.execute("SELECT jumlah FROM barang WHERE id = %s", (id,))
+        current = cursor.fetchone()
+        if not current:
+            return {"message": "Barang tidak ditemukan!"}, 404
+        jumlah_lama = current[0]
+
+        # 2. Cek Konflik (Merge Scenario)
+        cursor.execute(
+            "SELECT id, jumlah FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s AND id != %s",
+            (nama_barang, lemari, lokasi, id)
+        )
+        conflict = cursor.fetchone()
+
+        if conflict:
+            # Merge: Gabungkan stok ke ID target, hapus ID lama
+            target_id, target_jumlah = conflict
+            new_target_jumlah = target_jumlah + jumlah_baru
+            
+            cursor.execute("UPDATE barang SET jumlah = %s WHERE id = %s", (new_target_jumlah, target_id))
+            cursor.execute("DELETE FROM barang WHERE id = %s", (id,))
+            
+            aksi_msg = f"Merge: Pindah {jumlah_baru} ke ID {target_id}"
+            msg = "Barang berhasil digabungkan!"
+        else:
+            # Normal Edit: Update data dan catat selisih
+            selisih = jumlah_baru - jumlah_lama
+            if selisih > 0: aksi_msg = f"Tambah {selisih} barang"
+            elif selisih < 0: aksi_msg = f"Ambil {abs(selisih)} barang"
+            else: aksi_msg = "Tidak ada perubahan"
+
+            cursor.execute("UPDATE barang SET nama_barang = %s, jumlah = %s, lemari = %s, lokasi = %s WHERE id = %s", (nama_barang, jumlah_baru, lemari, lokasi, id))
+            msg = "Barang berhasil diupdate!"
+
+        # Catat History
+        cursor.execute(
+            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
+            (nama_barang, jumlah_baru, lemari, lokasi, aksi_msg, username)
+        )
+
+        db.commit()
+        cursor.close()
+        return {"message": msg}
+
+    @staticmethod
     def delete(nama_barang, lemari, lokasi):
         db = get_db()
         cursor = db.cursor()
