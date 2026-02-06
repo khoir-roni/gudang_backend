@@ -77,7 +77,7 @@ class Tool:
         return {"message": "Barang berhasil diambil!", "stok_tersisa": jumlah_sisa}
 
     @staticmethod
-    def delete(nama_barang, lokasi, lemari):
+    def delete(nama_barang, lemari, lokasi):
         db = get_db()
         cursor = db.cursor()
         cursor.execute(
