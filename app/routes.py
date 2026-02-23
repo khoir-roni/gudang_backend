@@ -123,7 +123,7 @@ def register():
         return jsonify({"message": "User berhasil ditambahkan"}), 201
     except Exception as e:
         return jsonify({"message": f"Error: {e}"}), 500
-
+    
 @main.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -136,3 +136,11 @@ def login():
         return jsonify({"message": "Login berhasil!", "token": str(user[0])})
     else:
         return jsonify({"message": "Username atau password salah"}), 401
+
+@main.route('/')
+def index():
+    return jsonify({
+        "status": "online",
+        "message": "Server Gudang Berjalan!",
+        "version": "1.0"
+    })
