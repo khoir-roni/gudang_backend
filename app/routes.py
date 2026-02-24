@@ -1,6 +1,8 @@
 from flask import Blueprint, request, jsonify
 from .models import Tool, History, User
 import bcrypt
+import os
+from flask import Flask, send_from_directory
 
 main = Blueprint('main', __name__)
 
@@ -137,10 +139,33 @@ def login():
     else:
         return jsonify({"message": "Username atau password salah"}), 401
 
+# @main.route('/')
+# def index():
+#     return jsonify({
+#         "status": "online",
+#         "message": "Server Gudang Berjalan!",
+#         "version": "1.0"
+#     })
+
+
+# Tentukan lokasi folder build secara dinamis
+# os.path.dirname(__file__) mendapatkan lokasi folder 'backend'
+# '..' digunakan untuk naik satu tingkat ke folder utama 'gudang_app'
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FLUTTER_WEB_DIR = os.path.join(BASE_DIR, '..', 'gudang_frontend_web', 'build', 'web')
+
 @main.route('/')
-def index():
-    return jsonify({
-        "status": "online",
-        "message": "Server Gudang Berjalan!",
-        "version": "1.0"
-    })
+def serve_index():
+    return send_from_directory(FLUTTER_WEB_DIR, 'index.html')
+
+@main.route('/<path:path>')
+def serve_static(path):
+    # Cek apakah file fisik (js, css, png) ada di folder tersebut
+    file_path = os.path.join(FLUTTER_WEB_DIR, path)
+    if path != "" and os.path.exists(file_path):
+        return send_from_directory(FLUTTER_WEB_DIR, path)
+    else:
+        # SPA Fallback: Jika tidak ada (routing flutter), arahkan ke index.html
+        return send_from_directory(FLUTTER_WEB_DIR, 'index.html')
+
+# ... sisa endpoint API Anda (login, get_barang, dll) ...
