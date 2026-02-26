@@ -2,6 +2,10 @@ from flask import Blueprint, request, jsonify
 from .models import Tool, History, User
 import bcrypt
 import os
+import mimetypes
+
+# Memastikan file JS dikirim dengan content-type yang benar (Fix untuk Windows)
+mimetypes.add_type('application/javascript', '.js')
 from flask import Flask, send_from_directory
 
 main = Blueprint('main', __name__)
