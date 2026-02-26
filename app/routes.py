@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, redirect, url_for, send_from_directory
 from .models import Tool, History, User
 import bcrypt
 import os
@@ -6,9 +6,31 @@ import mimetypes
 
 # Memastikan file JS dikirim dengan content-type yang benar (Fix untuk Windows)
 mimetypes.add_type('application/javascript', '.js')
-from flask import Flask, send_from_directory
 
 main = Blueprint('main', __name__)
+
+# Middleware untuk mengatur routing berdasarkan Domain (Cloudflare)
+@main.before_request
+def route_traffic_by_domain():
+    # Biarkan request OPTIONS (CORS Preflight) lewat
+    if request.method == 'OPTIONS':
+        return
+
+    # Ambil Host dari Header (Prioritas X-Forwarded-Host dari Cloudflare)
+    host = request.headers.get('X-Forwarded-Host', request.headers.get('Host', '')).lower()
+    path = request.path
+    
+    # Konfigurasi Domain
+    WEB_DOMAIN = 'gudangapp-hki.my.id'
+    
+    # Daftar Endpoint API
+    api_endpoints = ['/get_barang', '/add_barang', '/update_barang', '/edit_barang', 
+                     '/delete_barang', '/get_history', '/delete_history', '/login', '/register']
+
+    # Skenario: User membuka link API (misal /get_barang) di Domain WEB -> Redirect ke Landing Page
+    if WEB_DOMAIN in host and 'api.' not in host:
+        if path in api_endpoints and request.method == 'GET':
+            return redirect('/')
 
 @main.route('/add_barang', methods=['POST'])
 def add_barang():
@@ -166,6 +188,12 @@ SOURCE_DIR = os.path.join(BASE_DIR, '..', '..', 'gudang_frontend_web', 'web')
 # Penting: Route ini harus diletakkan paling bawah agar tidak menimpa route API
 @main.route('/<path:path>')
 def serve_static(path):
+    host = request.headers.get('X-Forwarded-Host', request.headers.get('Host', '')).lower()
+    
+    # Skenario: Akses path sembarang di API Domain -> Return 404 JSON (Bukan HTML)
+    if 'api.gudangapp-hki.my.id' in host:
+        return jsonify({"message": "Endpoint not found"}), 404
+
     # Cek folder build setiap request agar tidak perlu restart server setelah build
     static_dir = BUILD_DIR if os.path.exists(BUILD_DIR) else SOURCE_DIR
     
@@ -187,6 +215,16 @@ def serve_static(path):
 # Route khusus untuk root URL '/'
 @main.route('/')
 def serve_root():
+    host = request.headers.get('X-Forwarded-Host', request.headers.get('Host', '')).lower()
+
+    # Skenario: Akses Root di API Domain -> Return JSON Status
+    if 'api.gudangapp-hki.my.id' in host:
+        return jsonify({
+            "status": "online",
+            "message": "Gudang API Service is Running",
+            "version": "1.0"
+        })
+
     static_dir = BUILD_DIR if os.path.exists(BUILD_DIR) else SOURCE_DIR
     print(f"Serving Flutter from: {static_dir}") # Debug log untuk memastikan path benar
     return send_from_directory(static_dir, 'index.html')
