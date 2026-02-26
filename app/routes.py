@@ -158,25 +158,33 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BUILD_DIR = os.path.join(BASE_DIR, '..', '..', 'gudang_frontend_web', 'build', 'web')
 SOURCE_DIR = os.path.join(BASE_DIR, '..', '..', 'gudang_frontend_web', 'web')
 
-FLUTTER_WEB_DIR = BUILD_DIR if os.path.exists(BUILD_DIR) else SOURCE_DIR
-
 # Catch-all route untuk melayani file statis Flutter ATAU fallback ke index.html (SPA)
 # Penting: Route ini harus diletakkan paling bawah agar tidak menimpa route API
 @main.route('/<path:path>')
 def serve_static(path):
+    # Cek folder build setiap request agar tidak perlu restart server setelah build
+    static_dir = BUILD_DIR if os.path.exists(BUILD_DIR) else SOURCE_DIR
+    
     # 1. Cek apakah path merujuk ke file fisik yang ada (assets, js, css)
-    file_path = os.path.join(FLUTTER_WEB_DIR, path)
+    file_path = os.path.join(static_dir, path)
     
     if os.path.exists(file_path) and not os.path.isdir(file_path):
-        return send_from_directory(FLUTTER_WEB_DIR, path)
+        return send_from_directory(static_dir, path)
     
+    # Jika file dengan ekstensi tidak ditemukan (misal .js, .css), return 404
+    # Jangan return index.html, karena browser akan error "Unexpected token <"
+    if '.' in path:
+        return "File not found", 404
+
     # 2. Jika file tidak ditemukan, kembalikan index.html (untuk routing Flutter/SPA)
     # Ini menangani kasus refresh page pada route seperti /login atau /inventory
-    return send_from_directory(FLUTTER_WEB_DIR, 'index.html')
+    return send_from_directory(static_dir, 'index.html')
 
 # Route khusus untuk root URL '/'
 @main.route('/')
 def serve_root():
-    return send_from_directory(FLUTTER_WEB_DIR, 'index.html')
+    static_dir = BUILD_DIR if os.path.exists(BUILD_DIR) else SOURCE_DIR
+    print(f"Serving Flutter from: {static_dir}") # Debug log untuk memastikan path benar
+    return send_from_directory(static_dir, 'index.html')
 
 # ... sisa endpoint API Anda (login, get_barang, dll) ...
