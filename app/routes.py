@@ -153,7 +153,12 @@ def login():
 # '..' digunakan untuk naik satu tingkat ke folder utama 'gudang_app'
 # NOTE: Adjusted path to go up two levels from 'app' to 'gudangwarehouse' root, then into 'frontend_web'
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FLUTTER_WEB_DIR = os.path.join(BASE_DIR, '..', '..', 'gudang_frontend_web', 'build', 'web')
+
+# Cek apakah folder build tersedia (Production), jika tidak gunakan folder source 'web'
+BUILD_DIR = os.path.join(BASE_DIR, '..', '..', 'gudang_frontend_web', 'build', 'web')
+SOURCE_DIR = os.path.join(BASE_DIR, '..', '..', 'gudang_frontend_web', 'web')
+
+FLUTTER_WEB_DIR = BUILD_DIR if os.path.exists(BUILD_DIR) else SOURCE_DIR
 
 # Catch-all route untuk melayani file statis Flutter ATAU fallback ke index.html (SPA)
 # Penting: Route ini harus diletakkan paling bawah agar tidak menimpa route API
