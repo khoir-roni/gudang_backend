@@ -1,0 +1,68 @@
+graph TB
+    %% Subgraph untuk proses inisialisasi dari Batch File
+    subgraph Bootstrapper [Inisialisasi Server - start_Api.bat]
+        direction TB
+        Start((Start)) --> SetDir[cd /d %~dp0<br/>Set Working Directory]
+        SetDir --> ActVenv[call .venv\Scripts\activate<br/>Aktivasi Virtual Environment]
+        ActVenv --> RunPy[python run.py<br/>Jalankan Server Flask]
+        RunPy --> Listen[Server Listening on Port 5000]
+    end
+
+    %% Subgraph untuk Logika Backend di routes.py
+    subgraph Backend_Logic [Backend Request Handling - routes.py]
+        direction TB
+        Listen --> Router{Incoming Request}
+
+        %% Group Authentication
+        subgraph Auth_Module [Authentication]
+            Router -- POST /login --> FindUser[User.find_by_username]
+            FindUser --> CheckPass{Bcrypt Check}
+            CheckPass -- Valid --> RetToken[Return Token 200 OK]
+            CheckPass -- Invalid --> Ret401[Return 401 Unauthorized]
+            
+            Router -- POST /register --> CreateUser[User.create]
+        end
+
+        %% Group Inventory
+        subgraph Inventory_Module [Inventory Management]
+            Router -- GET /get_barang --> FetchAll[Tool.get_all]
+            
+            Router -- POST /add_barang --> ValAdd[Validasi Field]
+            ValAdd --> AddTool[Tool.create]
+            
+            Router -- POST /update_barang --> ValUpd[Validasi Field]
+            ValUpd --> UpdStock[Tool.update_stock]
+            
+            Router -- POST /edit_barang --> EditTool[Tool.edit]
+            
+            Router -- DELETE /delete_barang --> DelTool[Tool.delete]
+        end
+
+        %% Group History
+        subgraph History_Module [History Tracking]
+            Router -- GET /get_history --> GetHist[History.get_all]
+            Router -- DELETE /delete_history --> DelHist[History.delete]
+        end
+
+        %% Group Static Files (Frontend Integration)
+        subgraph Static_Serving [Frontend Delivery]
+            Router -- GET / --> ServeRoot[Serve index.html]
+            Router -- GET /path --> CheckFile{File Exists?}
+            CheckFile -- Yes --> ServeAsset[Serve Static File]
+            CheckFile -- No --> SPA_Fallback[Serve index.html<br/>SPA Routing]
+        end
+    end
+
+    %% Database Interactions
+    AddTool & UpdStock & EditTool & DelTool & FetchAll --> Database[(Database)]
+    GetHist & DelHist --> Database
+    FindUser & CreateUser --> Database
+
+    %% Styling
+    classDef script fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef logic fill:#e1f5fe,stroke:#0277bd,stroke-width:2px;
+    classDef db fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
+    
+    class Start,SetDir,ActVenv,RunPy script;
+    class Router,ValAdd,ValUpd,CheckPass,CheckFile logic;
+    class Database db;

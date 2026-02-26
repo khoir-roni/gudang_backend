@@ -1,0 +1,56 @@
+sequenceDiagram
+    autonumber
+    actor User as User (Staff)
+    participant UI_Cam as CameraScreen (Flutter)
+    participant ML as TfService (TFLite)
+    participant UI_Inv as InventoryScreen (Flutter)
+    participant API as Backend API (Flask)
+    participant DB as Database (SQL)
+
+    Note over User, DB: Flow: Scan Barang -> Identifikasi -> Update Stok
+
+    User->>UI_Cam: Buka Menu Scan & Capture Foto
+    activate UI_Cam
+    UI_Cam->>ML: classifyImage(imagePath)
+    activate ML
+    ML-->>UI_Cam: Return Result (Label: "Palu", Conf: 95%)
+    deactivate ML
+
+    alt Confidence < 50%
+        UI_Cam-->>User: Tampilkan Alert "Objek Tidak Dikenal"
+    else Confidence >= 50%
+        UI_Cam->>UI_Inv: Navigasi ke Inventory (query="Palu")
+        deactivate UI_Cam
+        activate UI_Inv
+        
+        Note right of UI_Inv: Auto-search saat init
+        UI_Inv->>API: GET /get_barang
+        activate API
+        API->>DB: Tool.get_all()
+        activate DB
+        DB-->>API: Return List[Tool]
+        deactivate DB
+        API-->>UI_Inv: JSON Response
+        deactivate API
+
+        UI_Inv->>UI_Inv: Filter List berdasarkan "Palu"
+        UI_Inv-->>User: Tampilkan Card Barang "Palu"
+
+        User->>UI_Inv: Klik "Ambil Barang" & Input Jumlah
+        UI_Inv->>API: POST /update_barang
+        activate API
+        Note right of UI_Inv: Body: {nama_barang: "Palu", jumlah: 1, ...}
+        
+        API->>DB: Tool.update_stock(nama, jumlah)
+        activate DB
+        Note right of DB: 1. Kurangi Stok<br/>2. Catat History
+        DB-->>API: Return Success
+        deactivate DB
+        
+        API-->>UI_Inv: 200 OK
+        deactivate API
+        
+        UI_Inv->>UI_Inv: Refresh Data (_loadTools)
+        UI_Inv-->>User: Tampilkan Notifikasi Sukses
+        deactivate UI_Inv
+    end
