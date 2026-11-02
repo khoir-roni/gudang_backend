@@ -111,8 +111,8 @@ def sync_tools():
             except (ValueError, TypeError):
                 jumlah = 0
 
-            lemari = str(row[col_lemari]).strip() if pd.notna(row[col_lemari]) else "Lemari Tools"
-            lokasi = str(row[col_lokasi]).strip() if pd.notna(row[col_lokasi]) else "Bengkel K&I"
+            lemari = str(row[col_lemari]).strip() if pd.notna(row[col_lemari]) else "Lemari Tools 1"
+            lokasi = str(row[col_lokasi]).strip() if pd.notna(row[col_lokasi]) else "Bengkel B1"
             tipe = str(row[col_tipe]).strip().lower() if col_tipe and pd.notna(row[col_tipe]) else "tool"
 
             tgl_kalibrasi = None
