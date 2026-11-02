@@ -60,6 +60,7 @@ def create_database_and_tables():
                     jumlah INTEGER NOT NULL CHECK (jumlah >= 0),
                     lemari TEXT NOT NULL,
                     lokasi TEXT NOT NULL,
+                    tipe TEXT NOT NULL DEFAULT 'tool',
                     UNIQUE(nama_barang, lemari, lokasi)
                 );
             """,
@@ -70,6 +71,7 @@ def create_database_and_tables():
                     jumlah INTEGER,
                     lemari TEXT,
                     lokasi TEXT,
+                    tipe TEXT DEFAULT 'tool',
                     aksi TEXT,
                     username TEXT,
                     waktu TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

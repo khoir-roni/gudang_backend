@@ -47,7 +47,8 @@ def add_barang():
             jumlah=data['jumlah'],
             lemari=data['lemari'],
             lokasi=data['lokasi'],
-            username=data['username']
+            username=data['username'],
+            tipe=data.get('tipe', 'tool')
         )
         return jsonify({"message": "Barang berhasil ditambahkan!"})
     except Exception as e:
@@ -56,7 +57,8 @@ def add_barang():
 @main.route('/get_barang', methods=['GET'])
 def get_barang():
     try:
-        tools = Tool.get_all()
+        tipe = request.args.get('tipe')
+        tools = Tool.get_all(tipe=tipe)
         return jsonify(tools)
     except Exception as e:
         return jsonify({"message": "Error fetching barang"}), 500
@@ -100,7 +102,8 @@ def edit_barang():
             jumlah_baru=data['jumlah'],
             lemari=data['lemari'],
             lokasi=data['lokasi'],
-            username=data['username']
+            username=data['username'],
+            tipe=data.get('tipe', 'tool')
         )
         if isinstance(result, tuple): return jsonify(result[0]), result[1]
         return jsonify(result)

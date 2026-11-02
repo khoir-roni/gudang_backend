@@ -4,39 +4,43 @@ import bcrypt
 
 class Tool:
     @staticmethod
-    def get_all():
+    def get_all(tipe=None):
         db = get_db()
         cursor = db.cursor(cursor_factory=RealDictCursor)
-        cursor.execute("SELECT * FROM barang ORDER BY id ASC")
+        if tipe:
+            cursor.execute("SELECT * FROM barang WHERE tipe = %s ORDER BY id ASC", (tipe,))
+        else:
+            cursor.execute("SELECT * FROM barang ORDER BY id ASC")
         tools = cursor.fetchall()
         cursor.close()
         return tools
 
     @staticmethod
-    def create(nama_barang, jumlah, lemari, lokasi, username):
+    def create(nama_barang, jumlah, lemari, lokasi, username, tipe='tool'):
+        tipe = (tipe or 'tool').lower()
         db = get_db()
         cursor = db.cursor()
 
         cursor.execute(
-            "SELECT jumlah FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s",
-            (nama_barang, lemari, lokasi)
+            "SELECT jumlah FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s AND tipe = %s",
+            (nama_barang, lemari, lokasi, tipe)
         )
         existing_barang = cursor.fetchone()
 
         if existing_barang:
             cursor.execute(
-                "UPDATE barang SET jumlah = jumlah + %s WHERE nama_barang = %s AND lemari = %s AND lokasi = %s",
-                (jumlah, nama_barang, lemari, lokasi)
+                "UPDATE barang SET jumlah = jumlah + %s WHERE nama_barang = %s AND lemari = %s AND lokasi = %s AND tipe = %s",
+                (jumlah, nama_barang, lemari, lokasi, tipe)
             )
         else:
             cursor.execute(
-                "INSERT INTO barang (nama_barang, jumlah, lemari, lokasi) VALUES (%s, %s, %s, %s)",
-                (nama_barang, jumlah, lemari, lokasi)
+                "INSERT INTO barang (nama_barang, jumlah, lemari, lokasi, tipe) VALUES (%s, %s, %s, %s, %s)",
+                (nama_barang, jumlah, lemari, lokasi, tipe)
             )
 
         cursor.execute(
-            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
-            (nama_barang, jumlah, lemari, lokasi, "Tambah Barang", username)
+            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())",
+            (nama_barang, jumlah, lemari, lokasi, tipe, f"Tambah Barang ({tipe.upper()})", username)
         )
 
         db.commit()
@@ -73,9 +77,14 @@ class Tool:
             (jumlah_sisa, nama_barang, lemari, lokasi)
         )
 
+        # Ambil tipe barang untuk pencatatan history
+        cursor.execute("SELECT tipe FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s", (nama_barang, lemari, lokasi))
+        tipe_row = cursor.fetchone()
+        tipe_val = tipe_row[0] if tipe_row and tipe_row[0] else 'tool'
+
         cursor.execute(
-            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
-            (nama_barang, jumlah, lemari, lokasi, "Ambil Barang", username)
+            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())",
+            (nama_barang, jumlah, lemari, lokasi, tipe_val, "Ambil Barang", username)
         )
 
         db.commit()
@@ -84,12 +93,13 @@ class Tool:
         return {"message": "Barang berhasil diambil!", "stok_tersisa": jumlah_sisa}
 
     @staticmethod
-    def edit(id, nama_barang, jumlah_baru, lemari, lokasi, username):
+    def edit(id, nama_barang, jumlah_baru, lemari, lokasi, username, tipe='tool'):
+        tipe = (tipe or 'tool').lower()
         db = get_db()
         cursor = db.cursor()
 
         # 1. Ambil data lama
-        cursor.execute("SELECT jumlah FROM barang WHERE id = %s", (id,))
+        cursor.execute("SELECT jumlah, tipe FROM barang WHERE id = %s", (id,))
         current = cursor.fetchone()
         if not current:
             return {"message": "Barang tidak ditemukan!"}, 404
@@ -97,8 +107,8 @@ class Tool:
 
         # 2. Cek Konflik (Merge Scenario)
         cursor.execute(
-            "SELECT id, jumlah FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s AND id != %s",
-            (nama_barang, lemari, lokasi, id)
+            "SELECT id, jumlah FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s AND tipe = %s AND id != %s",
+            (nama_barang, lemari, lokasi, tipe, id)
         )
         conflict = cursor.fetchone()
 
@@ -119,13 +129,13 @@ class Tool:
             elif selisih < 0: aksi_msg = f"Ambil {abs(selisih)} barang"
             else: aksi_msg = "Tidak ada perubahan"
 
-            cursor.execute("UPDATE barang SET nama_barang = %s, jumlah = %s, lemari = %s, lokasi = %s WHERE id = %s", (nama_barang, jumlah_baru, lemari, lokasi, id))
+            cursor.execute("UPDATE barang SET nama_barang = %s, jumlah = %s, lemari = %s, lokasi = %s, tipe = %s WHERE id = %s", (nama_barang, jumlah_baru, lemari, lokasi, tipe, id))
             msg = "Barang berhasil diupdate!"
 
         # Catat History
         cursor.execute(
-            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, NOW())",
-            (nama_barang, jumlah_baru, lemari, lokasi, aksi_msg, username)
+            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())",
+            (nama_barang, jumlah_baru, lemari, lokasi, tipe, aksi_msg, username)
         )
 
         db.commit()
