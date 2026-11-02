@@ -48,7 +48,8 @@ def add_barang():
             lemari=data['lemari'],
             lokasi=data['lokasi'],
             username=data['username'],
-            tipe=data.get('tipe', 'tool')
+            tipe=data.get('tipe', 'tool'),
+            tgl_kalibrasi=data.get('tgl_kalibrasi')
         )
         return jsonify({"message": "Barang berhasil ditambahkan!"})
     except Exception as e:
@@ -103,7 +104,8 @@ def edit_barang():
             lemari=data['lemari'],
             lokasi=data['lokasi'],
             username=data['username'],
-            tipe=data.get('tipe', 'tool')
+            tipe=data.get('tipe', 'tool'),
+            tgl_kalibrasi=data.get('tgl_kalibrasi')
         )
         if isinstance(result, tuple): return jsonify(result[0]), result[1]
         return jsonify(result)

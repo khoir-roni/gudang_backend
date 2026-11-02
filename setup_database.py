@@ -61,6 +61,7 @@ def create_database_and_tables():
                     lemari TEXT NOT NULL,
                     lokasi TEXT NOT NULL,
                     tipe TEXT NOT NULL DEFAULT 'tool',
+                    tgl_kalibrasi DATE,
                     UNIQUE(nama_barang, lemari, lokasi)
                 );
             """,
@@ -72,6 +73,7 @@ def create_database_and_tables():
                     lemari TEXT,
                     lokasi TEXT,
                     tipe TEXT DEFAULT 'tool',
+                    tgl_kalibrasi DATE,
                     aksi TEXT,
                     username TEXT,
                     waktu TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

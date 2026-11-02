@@ -13,11 +13,18 @@ class Tool:
             cursor.execute("SELECT * FROM barang ORDER BY id ASC")
         tools = cursor.fetchall()
         cursor.close()
+        for t in tools:
+            if t.get('tgl_kalibrasi'):
+                t['tgl_kalibrasi'] = t['tgl_kalibrasi'].strftime('%Y-%m-%d')
+            else:
+                t['tgl_kalibrasi'] = None
         return tools
 
     @staticmethod
-    def create(nama_barang, jumlah, lemari, lokasi, username, tipe='tool'):
+    def create(nama_barang, jumlah, lemari, lokasi, username, tipe='tool', tgl_kalibrasi=None):
         tipe = (tipe or 'tool').lower()
+        if tgl_kalibrasi in ('', 'null', 'None'):
+            tgl_kalibrasi = None
         db = get_db()
         cursor = db.cursor()
 
@@ -29,18 +36,18 @@ class Tool:
 
         if existing_barang:
             cursor.execute(
-                "UPDATE barang SET jumlah = jumlah + %s WHERE nama_barang = %s AND lemari = %s AND lokasi = %s AND tipe = %s",
-                (jumlah, nama_barang, lemari, lokasi, tipe)
+                "UPDATE barang SET jumlah = jumlah + %s, tgl_kalibrasi = COALESCE(%s, tgl_kalibrasi) WHERE nama_barang = %s AND lemari = %s AND lokasi = %s AND tipe = %s",
+                (jumlah, tgl_kalibrasi, nama_barang, lemari, lokasi, tipe)
             )
         else:
             cursor.execute(
-                "INSERT INTO barang (nama_barang, jumlah, lemari, lokasi, tipe) VALUES (%s, %s, %s, %s, %s)",
-                (nama_barang, jumlah, lemari, lokasi, tipe)
+                "INSERT INTO barang (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi) VALUES (%s, %s, %s, %s, %s, %s)",
+                (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi)
             )
 
         cursor.execute(
-            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())",
-            (nama_barang, jumlah, lemari, lokasi, tipe, f"Tambah Barang ({tipe.upper()})", username)
+            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())",
+            (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi, f"Tambah Barang ({tipe.upper()})", username)
         )
 
         db.commit()
@@ -77,14 +84,15 @@ class Tool:
             (jumlah_sisa, nama_barang, lemari, lokasi)
         )
 
-        # Ambil tipe barang untuk pencatatan history
-        cursor.execute("SELECT tipe FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s", (nama_barang, lemari, lokasi))
-        tipe_row = cursor.fetchone()
-        tipe_val = tipe_row[0] if tipe_row and tipe_row[0] else 'tool'
+        # Ambil tipe barang dan tgl_kalibrasi untuk pencatatan history
+        cursor.execute("SELECT tipe, tgl_kalibrasi FROM barang WHERE nama_barang = %s AND lemari = %s AND lokasi = %s", (nama_barang, lemari, lokasi))
+        row = cursor.fetchone()
+        tipe_val = row[0] if row and row[0] else 'tool'
+        tgl_kalibrasi_val = row[1] if row else None
 
         cursor.execute(
-            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())",
-            (nama_barang, jumlah, lemari, lokasi, tipe_val, "Ambil Barang", username)
+            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())",
+            (nama_barang, jumlah, lemari, lokasi, tipe_val, tgl_kalibrasi_val, "Ambil Barang", username)
         )
 
         db.commit()
@@ -93,8 +101,10 @@ class Tool:
         return {"message": "Barang berhasil diambil!", "stok_tersisa": jumlah_sisa}
 
     @staticmethod
-    def edit(id, nama_barang, jumlah_baru, lemari, lokasi, username, tipe='tool'):
+    def edit(id, nama_barang, jumlah_baru, lemari, lokasi, username, tipe='tool', tgl_kalibrasi=None):
         tipe = (tipe or 'tool').lower()
+        if tgl_kalibrasi in ('', 'null', 'None'):
+            tgl_kalibrasi = None
         db = get_db()
         cursor = db.cursor()
 
@@ -117,7 +127,7 @@ class Tool:
             target_id, target_jumlah = conflict
             new_target_jumlah = target_jumlah + jumlah_baru
             
-            cursor.execute("UPDATE barang SET jumlah = %s WHERE id = %s", (new_target_jumlah, target_id))
+            cursor.execute("UPDATE barang SET jumlah = %s, tgl_kalibrasi = COALESCE(%s, tgl_kalibrasi) WHERE id = %s", (new_target_jumlah, tgl_kalibrasi, target_id))
             cursor.execute("DELETE FROM barang WHERE id = %s", (id,))
             
             aksi_msg = f"Merge: Pindah {jumlah_baru} ke ID {target_id}"
@@ -129,13 +139,13 @@ class Tool:
             elif selisih < 0: aksi_msg = f"Ambil {abs(selisih)} barang"
             else: aksi_msg = "Tidak ada perubahan"
 
-            cursor.execute("UPDATE barang SET nama_barang = %s, jumlah = %s, lemari = %s, lokasi = %s, tipe = %s WHERE id = %s", (nama_barang, jumlah_baru, lemari, lokasi, tipe, id))
+            cursor.execute("UPDATE barang SET nama_barang = %s, jumlah = %s, lemari = %s, lokasi = %s, tipe = %s, tgl_kalibrasi = %s WHERE id = %s", (nama_barang, jumlah_baru, lemari, lokasi, tipe, tgl_kalibrasi, id))
             msg = "Barang berhasil diupdate!"
 
         # Catat History
         cursor.execute(
-            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())",
-            (nama_barang, jumlah_baru, lemari, lokasi, tipe, aksi_msg, username)
+            "INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi, aksi, username, waktu) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW())",
+            (nama_barang, jumlah_baru, lemari, lokasi, tipe, tgl_kalibrasi, aksi_msg, username)
         )
 
         db.commit()
@@ -161,6 +171,11 @@ class History:
         cursor.execute("SELECT * FROM history_barang ORDER BY waktu DESC")
         history = cursor.fetchall()
         cursor.close()
+        for h in history:
+            if h.get('tgl_kalibrasi'):
+                h['tgl_kalibrasi'] = h['tgl_kalibrasi'].strftime('%Y-%m-%d')
+            else:
+                h['tgl_kalibrasi'] = None
         return history
 
     @staticmethod
