@@ -55,12 +55,13 @@ def sync_tools():
     print(f" Sumber Berkas: {source_file.name}")
     print("=" * 65)
 
-    # Identifikasi kolom nama, jumlah, lemari, lokasi, tipe
+    # Identifikasi kolom nama, jumlah, lemari, lokasi, tipe, kalibrasi
     col_nama = next((c for c in df.columns if "nama" in c.lower()), None)
     col_jumlah = next((c for c in df.columns if "jumlah" in c.lower()), None)
     col_lemari = next((c for c in df.columns if "lemari" in c.lower()), None)
     col_lokasi = next((c for c in df.columns if "lokasi" in c.lower()), None)
     col_tipe = next((c for c in df.columns if "tipe" in c.lower()), None)
+    col_kalibrasi = next((c for c in df.columns if "kalibrasi" in c.lower()), None)
 
     if not col_nama or not col_jumlah or not col_lemari or not col_lokasi:
         print("ERROR: Struktur kolom tidak sesuai. Pastikan ada kolom Nama Barang, Jumlah, Lemari, dan Lokasi.")
@@ -87,19 +88,19 @@ def sync_tools():
 
         update_query = """
             UPDATE barang 
-            SET jumlah = %s, tipe = %s 
+            SET jumlah = %s, tipe = %s, tgl_kalibrasi = %s 
             WHERE id = %s;
         """
 
         insert_query = """
-            INSERT INTO barang (nama_barang, jumlah, lemari, lokasi, tipe)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO barang (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi)
+            VALUES (%s, %s, %s, %s, %s, %s)
             RETURNING id;
         """
 
         history_query = """
-            INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, aksi, username)
-            VALUES (%s, %s, %s, %s, %s, %s, %s);
+            INSERT INTO history_barang (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi, aksi, username)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
         """
 
         for _, row in df.iterrows():
@@ -114,23 +115,29 @@ def sync_tools():
             lokasi = str(row[col_lokasi]).strip() if pd.notna(row[col_lokasi]) else "Bengkel K&I"
             tipe = str(row[col_tipe]).strip().lower() if col_tipe and pd.notna(row[col_tipe]) else "tool"
 
+            tgl_kalibrasi = None
+            if col_kalibrasi and pd.notna(row[col_kalibrasi]):
+                val_str = str(row[col_kalibrasi]).strip()
+                if val_str and val_str.lower() not in ('nan', 'none', 'null', ''):
+                    tgl_kalibrasi = val_str.split(' ')[0]
+
             # Check if record already exists
             cur.execute(check_query, (nama_barang, lemari, lokasi))
             existing = cur.fetchone()
 
             if existing:
                 item_id = existing[0]
-                cur.execute(update_query, (jumlah, tipe, item_id))
+                cur.execute(update_query, (jumlah, tipe, tgl_kalibrasi, item_id))
                 updated_count += 1
                 aksi = "UPDATE_EXCEL"
             else:
-                cur.execute(insert_query, (nama_barang, jumlah, lemari, lokasi, tipe))
+                cur.execute(insert_query, (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi))
                 item_id = cur.fetchone()[0]
                 inserted_count += 1
                 aksi = "TAMBAH_EXCEL"
 
             # Catat ke history_barang
-            cur.execute(history_query, (nama_barang, jumlah, lemari, lokasi, tipe, aksi, "admin_import"))
+            cur.execute(history_query, (nama_barang, jumlah, lemari, lokasi, tipe, tgl_kalibrasi, aksi, "admin_import"))
 
         conn.commit()
 
@@ -147,7 +154,7 @@ def sync_tools():
         print(f"  * Barang Berhasil Diupdate : {updated_count}")
         print(f"  * Total Barang di Database : {total_in_db}")
         print("-" * 65)
-        print("[SUKSES] Seluruh data tools berhasil disinkronkan ke PostgreSQL!")
+        print("[SUKSES] Seluruh data tools & tanggal kalibrasi berhasil disinkronkan ke PostgreSQL!")
 
     except psycopg2.Error as e:
         print(f"[ERROR DATABASE] {e}")
