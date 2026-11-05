@@ -54,3 +54,9 @@ instance/
 # Mac / Linux / Windows system files
 .DS_Store
 Thumbs.db
+
+# Database backups
+*.sql
+
+# Credentials & data dumps
+*.csv

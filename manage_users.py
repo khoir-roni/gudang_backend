@@ -12,7 +12,26 @@ from pathlib import Path
 # Deteksi Host & Target
 HOST_NAME = socket.gethostname()
 IS_PC_SERVER = (HOST_NAME == "DESKTOP-GB64DDS")
-TARGET_DESC = "PC SERVER (100.119.4.53 / DESKTOP-GB64DDS)" if IS_PC_SERVER else f"LAPTOP LOKAL ({HOST_NAME})"
+TARGET_DESC = "PC SERVER (DESKTOP-GB64DDS)" if IS_PC_SERVER else f"LAPTOP LOKAL ({HOST_NAME})"
+
+# Kandidat Jalur SSH ke PC Server (Urutan Prioritas Fallback)
+SSH_HOST_CANDIDATES = [
+    {
+        "host": "100.119.4.53",
+        "name": "Tailscale VPN",
+        "desc": "Tailscale VPN (100.119.4.53)"
+    },
+    {
+        "host": "gudangapp-server2",
+        "name": "Cloudflare Tunnel",
+        "desc": "Cloudflare Tunnel (gudangapp-server2 -> ssh.gudangapp-hki.my.id)"
+    },
+    {
+        "host": "gudangapp-lokal",
+        "name": "Jaringan LAN Lokal",
+        "desc": "Jaringan LAN Lokal (gudangapp-lokal -> 192.168.31.58)"
+    }
+]
 
 # Database Configuration
 try:
@@ -35,6 +54,46 @@ except Exception:
 
 def get_connection():
     return psycopg2.connect(**DB_CONFIG)
+
+def detect_active_host(quiet=False):
+    """
+    Mendeteksi host SSH PC Server yang aktif dengan urutan:
+    1. 100.119.4.53 (Tailscale VPN)
+    2. gudangapp-server2 (Cloudflare Tunnel)
+    3. gudangapp-lokal (Jaringan LAN Lokal)
+    """
+    if not quiet:
+        print("\n [INFO] Memeriksa ketersediaan jalur koneksi SSH ke PC Server...")
+    for candidate in SSH_HOST_CANDIDATES:
+        host = candidate["host"]
+        name = candidate["name"]
+        if not quiet:
+            print(f"  - Menguji jalur {name} ({host})... ", end="", flush=True)
+        try:
+            res = subprocess.run(
+                ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3", host, "echo PING_OK"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=6
+            )
+            if res.returncode == 0 and "PING_OK" in res.stdout:
+                if not quiet:
+                    print("[AKTIF]")
+                return host
+            else:
+                if not quiet:
+                    print("[OFFLINE / TIMEOUT]")
+        except subprocess.TimeoutExpired:
+            if not quiet:
+                print("[TIMEOUT]")
+        except Exception as e:
+            if not quiet:
+                print(f"[GAGAL: {e}]")
+
+    if not quiet:
+        print(" [PERINGATAN] Tidak ada jalur yang merespons ping cepat. Menggunakan fallback 100.119.4.53.")
+    return "100.119.4.53"
 
 def list_users():
     conn = get_connection()
@@ -209,9 +268,14 @@ def view_login_history(limit=20):
             print(f"{waktu:<22} | {r['username']:<18} | {r['aksi']}")
     print("=" * 70 + "\n")
 
-def switch_to_server():
-    print("\n [INFO] Menghubungkan ke PC Server (100.119.4.53) via SSH...")
-    cmd = 'ssh -t "server 2@100.119.4.53" "cd D:\\gudangWarehouse\\gudang_backend; .\\.venv\\Scripts\\python.exe manage_users.py"'
+def switch_to_server(target_host=None):
+    if not target_host or target_host.lower() == 'auto':
+        target_host = detect_active_host()
+    desc = next((item["desc"] for item in SSH_HOST_CANDIDATES if item["host"] == target_host), target_host)
+    print(f"\n [INFO] Menghubungkan ke PC Server via {desc}...\n", flush=True)
+    sys.stdout.flush()
+    tty_flag = "-t" if sys.stdin.isatty() else ""
+    cmd = f'ssh {tty_flag} {target_host} "cd D:\\gudangWarehouse\\gudang_backend; .\\.venv\\Scripts\\python.exe manage_users.py"'.strip()
     os.system(cmd)
 
 def interactive_menu():
@@ -226,7 +290,7 @@ def interactive_menu():
         print(" [4] Hapus Pengguna")
         print(" [5] Lihat Riwayat Login Terakhir")
         if not IS_PC_SERVER:
-            print(" [S] Beralih / Buka Database PC SERVER (100.119.4.53)")
+            print(" [S] Beralih / Buka Database PC SERVER (Auto-detect / Multi-host)")
         print(" [0] Keluar")
         print("-" * 60)
         choice = input(" Pilih menu: ").strip()
@@ -251,7 +315,8 @@ def interactive_menu():
 
 def main():
     parser = argparse.ArgumentParser(description="Manajemen Pengguna Database Gudang Saguling")
-    parser.add_argument("--server", action="store_true", help="Arahkan langsung ke database PC Server (100.119.4.53) via SSH")
+    parser.add_argument("--server", action="store_true", help="Arahkan langsung ke database PC Server via SSH")
+    parser.add_argument("--host", default=None, help="Tentukan host SSH spesifik (100.119.4.53, gudangapp-server2, gudangapp-lokal) atau 'auto'")
     parser.add_argument("--list", action="store_true", help="Tampilkan daftar seluruh pengguna")
     parser.add_argument("--add", nargs=2, metavar=('USERNAME', 'PASSWORD'), help="Tambah pengguna baru")
     parser.add_argument("--reset-password", nargs=2, metavar=('USERNAME', 'NEW_PASSWORD'), help="Reset password pengguna")
@@ -261,10 +326,29 @@ def main():
     args = parser.parse_args()
 
     if args.server and not IS_PC_SERVER:
-        # Rekonstruksi argumen tanpa --server
-        forwarded_args = [arg for arg in sys.argv[1:] if arg != "--server"]
+        target_host = args.host if (args.host and args.host.lower() != 'auto') else detect_active_host()
+        desc = next((item["desc"] for item in SSH_HOST_CANDIDATES if item["host"] == target_host), target_host)
+
+        # Rekonstruksi argumen tanpa --server dan tanpa --host
+        forwarded_args = []
+        i = 1
+        while i < len(sys.argv):
+            arg = sys.argv[i]
+            if arg == "--server":
+                i += 1
+                continue
+            if arg == "--host":
+                i += 2
+                continue
+            forwarded_args.append(arg)
+            i += 1
+
         remote_cmd = f"cd D:\\gudangWarehouse\\gudang_backend; .\\.venv\\Scripts\\python.exe manage_users.py {' '.join(forwarded_args)}".strip()
-        os.system(f'ssh -t "server 2@100.119.4.53" "{remote_cmd}"')
+        print(f"\n [INFO] Menjalankan perintah remote di PC Server via {desc}...\n", flush=True)
+        sys.stdout.flush()
+        tty_flag = "-t" if sys.stdin.isatty() else ""
+        cmd = f'ssh {tty_flag} {target_host} "{remote_cmd}"'.strip()
+        os.system(cmd)
         return
 
     if args.list:
