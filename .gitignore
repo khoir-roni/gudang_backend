@@ -57,6 +57,7 @@ Thumbs.db
 
 # Database backups
 *.sql
+backups/
 
 # Credentials & data dumps
 *.csv
