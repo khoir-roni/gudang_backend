@@ -1,10 +1,18 @@
 import sys
+import os
 import getpass
 import argparse
+import socket
+import subprocess
 import bcrypt
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from pathlib import Path
+
+# Deteksi Host & Target
+HOST_NAME = socket.gethostname()
+IS_PC_SERVER = (HOST_NAME == "DESKTOP-GB64DDS")
+TARGET_DESC = "PC SERVER (100.119.4.53 / DESKTOP-GB64DDS)" if IS_PC_SERVER else f"LAPTOP LOKAL ({HOST_NAME})"
 
 # Database Configuration
 try:
@@ -17,7 +25,6 @@ try:
         "port": Config.DB_PORT
     }
 except Exception:
-    import os
     DB_CONFIG = {
         "dbname": os.environ.get("DB_NAME", "gudang"),
         "user": os.environ.get("DB_USER", "postgres"),
@@ -47,6 +54,7 @@ def list_users():
 
     print("\n" + "=" * 80)
     print("                    DAFTAR PENGGUNA SISTEM GUDANG SAGULING")
+    print(f"            Target Database: {TARGET_DESC}")
     print("=" * 80)
     print(f"{'ID':<5} | {'Username':<18} | {'Login':<7} | {'Aksi Gudang':<12} | {'Login Terakhir'}")
     print("-" * 80)
@@ -189,6 +197,7 @@ def view_login_history(limit=20):
 
     print("\n" + "=" * 70)
     print(f"           {limit} RIWAYAT LOGIN TERAKHIR SISTEM GUDANG")
+    print(f"            Target Database: {TARGET_DESC}")
     print("=" * 70)
     print(f"{'Waktu':<22} | {'Username':<18} | {'Aktivitas'}")
     print("-" * 70)
@@ -200,19 +209,27 @@ def view_login_history(limit=20):
             print(f"{waktu:<22} | {r['username']:<18} | {r['aksi']}")
     print("=" * 70 + "\n")
 
+def switch_to_server():
+    print("\n [INFO] Menghubungkan ke PC Server (100.119.4.53) via SSH...")
+    cmd = 'ssh -t "server 2@100.119.4.53" "cd D:\\gudangWarehouse\\gudang_backend; .\\.venv\\Scripts\\python.exe manage_users.py"'
+    os.system(cmd)
+
 def interactive_menu():
     while True:
-        print("\n" + "#" * 55)
+        print("\n" + "#" * 60)
         print("   SISTEM MANAJEMEN PENGGUNA GUDANG PLTA SAGULING")
-        print("#" * 55)
+        print(f"   Target: {TARGET_DESC}")
+        print("#" * 60)
         print(" [1] Lihat Semua Pengguna")
         print(" [2] Tambah Pengguna Baru (Auto Bcrypt Hash)")
         print(" [3] Reset / Ganti Password Pengguna")
         print(" [4] Hapus Pengguna")
         print(" [5] Lihat Riwayat Login Terakhir")
+        if not IS_PC_SERVER:
+            print(" [S] Beralih / Buka Database PC SERVER (100.119.4.53)")
         print(" [0] Keluar")
-        print("-" * 55)
-        choice = input(" Pilih menu (0-5): ").strip()
+        print("-" * 60)
+        choice = input(" Pilih menu: ").strip()
 
         if choice == '1':
             list_users()
@@ -224,14 +241,17 @@ def interactive_menu():
             delete_user()
         elif choice == '5':
             view_login_history(20)
+        elif choice.upper() == 'S' and not IS_PC_SERVER:
+            switch_to_server()
         elif choice == '0':
             print("\n Terima kasih. Keluar dari manajemen pengguna.\n")
             break
         else:
-            print(" [PILIHAN TIDAK VALID] Silakan masukkan angka 0 sampai 5.")
+            print(" [PILIHAN TIDAK VALID] Silakan masukkan opsi yang sesuai di menu.")
 
 def main():
     parser = argparse.ArgumentParser(description="Manajemen Pengguna Database Gudang Saguling")
+    parser.add_argument("--server", action="store_true", help="Arahkan langsung ke database PC Server (100.119.4.53) via SSH")
     parser.add_argument("--list", action="store_true", help="Tampilkan daftar seluruh pengguna")
     parser.add_argument("--add", nargs=2, metavar=('USERNAME', 'PASSWORD'), help="Tambah pengguna baru")
     parser.add_argument("--reset-password", nargs=2, metavar=('USERNAME', 'NEW_PASSWORD'), help="Reset password pengguna")
@@ -239,6 +259,13 @@ def main():
     parser.add_argument("--history", type=int, nargs='?', const=20, help="Tampilkan riwayat login")
 
     args = parser.parse_args()
+
+    if args.server and not IS_PC_SERVER:
+        # Rekonstruksi argumen tanpa --server
+        forwarded_args = [arg for arg in sys.argv[1:] if arg != "--server"]
+        remote_cmd = f"cd D:\\gudangWarehouse\\gudang_backend; .\\.venv\\Scripts\\python.exe manage_users.py {' '.join(forwarded_args)}".strip()
+        os.system(f'ssh -t "server 2@100.119.4.53" "{remote_cmd}"')
+        return
 
     if args.list:
         list_users()
