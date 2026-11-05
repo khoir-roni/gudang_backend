@@ -210,3 +210,87 @@ class User:
         user = cursor.fetchone()
         cursor.close()
         return user
+
+class MLHarvestLog:
+    @staticmethod
+    def create(filename, image_path, ground_truth_label, predicted_label=None, predicted_confidence=None, uploaded_by=None):
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            INSERT INTO ml_harvest_log 
+            (filename, image_path, ground_truth_label, predicted_label, predicted_confidence, uploaded_by, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id
+            """,
+            (filename, image_path, ground_truth_label, predicted_label, predicted_confidence, uploaded_by)
+        )
+        log_id = cursor.fetchone()[0]
+        db.commit()
+        cursor.close()
+        return log_id
+
+    @staticmethod
+    def get_stats():
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            SELECT ground_truth_label, COUNT(*) 
+            FROM ml_harvest_log 
+            GROUP BY ground_truth_label 
+            ORDER BY COUNT(*) DESC
+            """
+        )
+        rows = cursor.fetchall()
+        cursor.close()
+        return [{"label": r[0], "count": r[1]} for r in rows]
+
+class MLModelRelease:
+    @staticmethod
+    def get_active():
+        db = get_db()
+        cursor = db.cursor()
+        cursor.execute(
+            """
+            SELECT version, model_filename, labels_filename, model_sha256, classes_count, accuracy, release_date
+            FROM ml_model_release
+            WHERE is_active = TRUE
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        )
+        row = cursor.fetchone()
+        cursor.close()
+        if not row:
+            return None
+        return {
+            "version": row[0],
+            "model_filename": row[1],
+            "labels_filename": row[2],
+            "model_sha256": row[3],
+            "classes_count": row[4],
+            "accuracy": row[5],
+            "release_date": row[6].isoformat() if row[6] else None
+        }
+
+    @staticmethod
+    def create(version, model_filename, labels_filename, model_sha256, classes_count=54, accuracy=None, is_active=True):
+        db = get_db()
+        cursor = db.cursor()
+        if is_active:
+            cursor.execute("UPDATE ml_model_release SET is_active = FALSE")
+        cursor.execute(
+            """
+            INSERT INTO ml_model_release
+            (version, model_filename, labels_filename, model_sha256, classes_count, accuracy, is_active, release_date)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id
+            """,
+            (version, model_filename, labels_filename, model_sha256, classes_count, accuracy, is_active)
+        )
+        rel_id = cursor.fetchone()[0]
+        db.commit()
+        cursor.close()
+        return rel_id
+

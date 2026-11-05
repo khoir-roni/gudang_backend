@@ -1,7 +1,12 @@
 from flask import Blueprint, request, jsonify, redirect, url_for, send_from_directory
-from .models import Tool, History, User
+from .models import Tool, History, User, MLHarvestLog, MLModelRelease
 import bcrypt
 import os
+import json
+import uuid
+import datetime
+from pathlib import Path
+from werkzeug.utils import secure_filename
 import mimetypes
 
 # Memastikan file JS dikirim dengan content-type yang benar (Fix untuk Windows)
@@ -235,3 +240,126 @@ def serve_root():
     return send_from_directory(static_dir, 'index.html')
 
 # ... sisa endpoint API Anda (login, get_barang, dll) ...
+
+def get_ml_base_dir():
+    # 1. Cek server path
+    server_dir = Path(r"D:\gudangWarehouse\gudang_model_of_Tools_maintenance")
+    if server_dir.exists():
+        return server_dir
+    # 2. Cek dev path
+    dev_dir = Path(r"C:\dev\Saguling\INOVASI\stats\gudangwarehouse\gudang_model_of_Tools_maintenance")
+    if dev_dir.exists():
+        return dev_dir
+    # 3. Fallback sibling
+    sibling = Path(__file__).resolve().parent.parent.parent / "gudang_model_of_Tools_maintenance"
+    return sibling
+
+# --- ML OTA & ACTIVE LEARNING ENDPOINTS ---
+
+@main.route('/api/ml/model/version', methods=['GET'])
+def get_ml_model_version():
+    """Mengembalikan informasi versi model ML aktif untuk update OTA."""
+    try:
+        active_model = MLModelRelease.get_active()
+        if not active_model:
+            ml_dir = get_ml_base_dir()
+            version_file = ml_dir / "exported_model" / "version.json"
+            if version_file.exists():
+                with open(version_file, 'r', encoding='utf-8') as f:
+                    active_model = json.load(f)
+            else:
+                return jsonify({"message": "Model belum tersedia"}), 404
+
+        base_host = request.host_url.rstrip('/')
+        active_model['model_download_url'] = f"{base_host}/api/ml/model/download/{active_model['model_filename']}"
+        active_model['labels_download_url'] = f"{base_host}/api/ml/model/download/{active_model['labels_filename']}"
+        return jsonify(active_model), 200
+    except Exception as e:
+        return jsonify({"message": f"Gagal mengambil versi model: {str(e)}"}), 500
+
+@main.route('/api/ml/model/download/<filename>', methods=['GET'])
+def download_ml_model(filename):
+    """Melayani pengunduhan berkas model (.tflite) atau labels (.txt)."""
+    try:
+        clean_name = secure_filename(filename)
+        ml_dir = get_ml_base_dir()
+        model_dir = ml_dir / "exported_model"
+        target_path = model_dir / clean_name
+
+        if not target_path.exists():
+            return jsonify({"message": f"Berkas {clean_name} tidak ditemukan"}), 404
+
+        return send_from_directory(str(model_dir), clean_name, as_attachment=True)
+    except Exception as e:
+        return jsonify({"message": f"Gagal mengunduh berkas: {str(e)}"}), 500
+
+@main.route('/api/ml/collect', methods=['POST'])
+def collect_training_image():
+    """
+    Menerima foto dari kamera HP teknisi bersama label konfirmasi (ground truth).
+    Menyimpan foto ke harvested_dataset/<label>/ dan mencatat log ke database.
+    """
+    try:
+        if 'image' not in request.files:
+            return jsonify({"message": "File 'image' diperlukan"}), 400
+
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({"message": "Nama file kosong"}), 400
+
+        ground_truth_label = request.form.get('ground_truth_label')
+        if not ground_truth_label:
+            return jsonify({"message": "Field 'ground_truth_label' diperlukan"}), 400
+
+        predicted_label = request.form.get('predicted_label')
+        predicted_confidence = request.form.get('predicted_confidence')
+        if predicted_confidence is not None:
+            try:
+                predicted_confidence = float(predicted_confidence)
+            except ValueError:
+                predicted_confidence = None
+
+        uploaded_by = request.form.get('uploaded_by', 'anonymous')
+
+        clean_label = secure_filename(ground_truth_label.strip())
+        if not clean_label:
+            clean_label = "Uncategorized"
+
+        ml_dir = get_ml_base_dir()
+        target_dir = ml_dir / "harvested_dataset" / clean_label
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        unique_id = uuid.uuid4().hex[:6]
+        save_filename = f"{timestamp}_{unique_id}.jpg"
+        save_path = target_dir / save_filename
+
+        file.save(str(save_path))
+
+        relative_path = f"harvested_dataset/{clean_label}/{save_filename}"
+        log_id = MLHarvestLog.create(
+            filename=save_filename,
+            image_path=relative_path,
+            ground_truth_label=ground_truth_label,
+            predicted_label=predicted_label,
+            predicted_confidence=predicted_confidence,
+            uploaded_by=uploaded_by
+        )
+
+        return jsonify({
+            "message": "Data latih berhasil dikumpulkan",
+            "log_id": log_id,
+            "filename": save_filename,
+            "saved_to": relative_path
+        }), 201
+    except Exception as e:
+        return jsonify({"message": f"Gagal mengumpulkan data latih: {str(e)}"}), 500
+
+@main.route('/api/ml/stats', methods=['GET'])
+def get_ml_stats():
+    """Mengembalikan statistik data latih yang berhasil dikumpulkan per label."""
+    try:
+        stats = MLHarvestLog.get_stats()
+        return jsonify({"stats": stats}), 200
+    except Exception as e:
+        return jsonify({"message": f"Gagal mengambil statistik: {str(e)}"}), 500
