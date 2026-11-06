@@ -363,3 +363,64 @@ def get_ml_stats():
         return jsonify({"stats": stats}), 200
     except Exception as e:
         return jsonify({"message": f"Gagal mengambil statistik: {str(e)}"}), 500
+
+
+@main.route('/api/ml/classes', methods=['GET'])
+def get_ml_classes():
+    """Mengembalikan daftar seluruh kelas / label yang dikenali model saat ini."""
+    try:
+        ml_dir = get_ml_base_dir()
+        labels_file = ml_dir / 'exported_model' / 'labels.txt'
+        classes = []
+        if labels_file.exists():
+            with open(labels_file, 'r', encoding='utf-8') as f:
+                classes = [line.strip() for line in f if line.strip()]
+        else:
+            cleaned_dir = ml_dir / 'cleaned_dataset'
+            if cleaned_dir.exists():
+                classes = sorted([d.name for d in cleaned_dir.iterdir() if d.is_dir()])
+        return jsonify({
+            'total_classes': len(classes),
+            'classes': classes
+        }), 200
+    except Exception as e:
+        return jsonify({'message': f'Gagal membaca daftar kelas: {str(e)}'}), 500
+
+@main.route('/api/ml/train/trigger', methods=['POST'])
+def trigger_ml_retraining():
+    """Memicu proses retraining model di server secara asynchronous (background process)."""
+    try:
+        ml_dir = get_ml_base_dir()
+        script_path = ml_dir / 'server_auto_retrain.py'
+        venv_python = ml_dir / '.venv' / 'Scripts' / 'python.exe'
+
+        if not script_path.exists():
+            return jsonify({'message': 'Skrip server_auto_retrain.py tidak ditemukan di server'}), 404
+
+        python_bin = str(venv_python) if venv_python.exists() else sys.executable
+
+        data = request.get_json(silent=True) or {}
+        force = str(data.get('force', request.args.get('force', 'false'))).lower() in ('true', '1')
+        epochs = int(data.get('epochs', request.args.get('epochs', 15)))
+
+        cmd = [python_bin, str(script_path), f'--epochs={epochs}']
+        if force:
+            cmd.append('--force')
+
+        import subprocess
+        proc = subprocess.Popen(
+            cmd,
+            cwd=str(ml_dir),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        return jsonify({
+            'message': 'Proses retraining model berhasil dimulai di background server (RTX 2000 Pro)',
+            'pid': proc.pid,
+            'force': force,
+            'epochs': epochs
+        }), 202
+    except Exception as e:
+        return jsonify({'message': f'Gagal memicu retraining: {str(e)}'}), 500
