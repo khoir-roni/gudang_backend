@@ -1,9 +1,9 @@
 {
-  "latest_version": "1.3.1",
-  "version_code": 3,
-  "apk_filename": "stats_app_v1.3.1.apk",
+  "latest_version": "1.3.2",
+  "version_code": 5,
+  "apk_filename": "stats_app_v1.3.2.apk",
   "release_date": "2026-11-11",
   "force_update": false,
-  "changelog": "Fitur In-App APK Self-Updater & Model Vision TFLite v1.2.0 (59 kelas, akurasi 98.38%).",
-  "apk_size_mb": 41.1
+  "changelog": "Eliminasi auto-upload camera scan offline, normalisasi label anti-underscore, dan integrasi model vision 55 kelas baku (100% akurasi).",
+  "apk_size_mb": 41.7
 }
