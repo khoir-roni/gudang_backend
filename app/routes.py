@@ -8,6 +8,7 @@ import datetime
 from pathlib import Path
 from werkzeug.utils import secure_filename
 import mimetypes
+import re
 
 # Memastikan file JS dikirim dengan content-type yang benar (Fix untuk Windows)
 mimetypes.add_type('application/javascript', '.js')
@@ -329,7 +330,9 @@ def collect_training_image():
 
         uploaded_by = request.form.get('uploaded_by', 'anonymous')
 
-        clean_label = secure_filename(ground_truth_label.strip())
+        # Normalisasi label: ganti underscore dengan spasi, bersihkan karakter path tidak aman
+        clean_label = ground_truth_label.strip().replace('_', ' ')
+        clean_label = re.sub(r'[\\/*?:"<>|]', '', clean_label).strip()
         if not clean_label:
             clean_label = "Uncategorized"
 
