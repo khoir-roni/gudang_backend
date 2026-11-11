@@ -270,9 +270,17 @@ def get_ml_model_version():
             else:
                 return jsonify({"message": "Model belum tersedia"}), 404
 
+        # Harmonize key names across versions (dual compatibility)
+        model_name = active_model.get('model_filename') or active_model.get('model_file', 'mobilenet_float.tflite')
+        labels_name = active_model.get('labels_filename') or active_model.get('labels_file', 'labels.txt')
+        model_sha = active_model.get('model_sha256') or active_model.get('sha256', '')
+
         base_host = request.host_url.rstrip('/')
-        active_model['model_download_url'] = f"{base_host}/api/ml/model/download/{active_model['model_filename']}"
-        active_model['labels_download_url'] = f"{base_host}/api/ml/model/download/{active_model['labels_filename']}"
+        active_model['model_filename'] = model_name
+        active_model['labels_filename'] = labels_name
+        active_model['model_sha256'] = model_sha
+        active_model['model_download_url'] = f"{base_host}/api/ml/model/download/{model_name}"
+        active_model['labels_download_url'] = f"{base_host}/api/ml/model/download/{labels_name}"
         return jsonify(active_model), 200
     except Exception as e:
         return jsonify({"message": f"Gagal mengambil versi model: {str(e)}"}), 500
@@ -424,3 +432,73 @@ def trigger_ml_retraining():
         }), 202
     except Exception as e:
         return jsonify({'message': f'Gagal memicu retraining: {str(e)}'}), 500
+
+
+def get_app_release_dir():
+    """Mengembalikan direktori penyimpanan berkas rilis APK."""
+    # Prioritaskan direktori server jika ada
+    server_dir = Path("D:/gudangWarehouse/app_release")
+    if server_dir.exists():
+        return server_dir
+    local_dir = Path(__file__).resolve().parent.parent / "app_release"
+    local_dir.mkdir(parents=True, exist_ok=True)
+    return local_dir
+
+
+@main.route('/api/app/version', methods=['GET'])
+def get_app_version():
+    """Mengembalikan informasi versi aplikasi APK terbaru untuk In-App Self-Update."""
+    try:
+        release_dir = get_app_release_dir()
+        version_file = release_dir / "version.json"
+        
+        default_info = {
+            "latest_version": "1.3.0",
+            "version_code": 2,
+            "apk_filename": "stats_app_v1.3.0.apk",
+            "release_date": "2026-11-11",
+            "force_update": False,
+            "changelog": "Pembaruan arsitektur model vision ML, optimasi performa & self-update.",
+            "apk_size_mb": 0.0
+        }
+        
+        if version_file.exists():
+            with open(version_file, 'r', encoding='utf-8') as f:
+                info = json.load(f)
+        else:
+            info = default_info
+            with open(version_file, 'w', encoding='utf-8') as f:
+                json.dump(info, f, indent=2)
+                
+        base_host = request.host_url.rstrip('/')
+        apk_name = info.get("apk_filename", "stats_app_v1.3.0.apk")
+        apk_path = release_dir / apk_name
+        if apk_path.exists():
+            info["apk_size_mb"] = round(apk_path.stat().st_size / (1024 * 1024), 2)
+            
+        info["apk_download_url"] = f"{base_host}/api/app/download/{apk_name}"
+        return jsonify(info), 200
+    except Exception as e:
+        return jsonify({"message": f"Gagal mengambil versi aplikasi: {str(e)}"}), 500
+
+
+@main.route('/api/app/download/<filename>', methods=['GET'])
+def download_app_apk(filename):
+    """Melayani pengunduhan berkas APK aplikasi untuk self-updating."""
+    try:
+        clean_name = secure_filename(filename)
+        release_dir = get_app_release_dir()
+        target_path = release_dir / clean_name
+
+        if not target_path.exists():
+            return jsonify({"message": f"Berkas APK '{clean_name}' tidak ditemukan di server"}), 404
+
+        return send_from_directory(
+            str(release_dir), 
+            clean_name, 
+            as_attachment=True, 
+            mimetype='application/vnd.android.package-archive'
+        )
+    except Exception as e:
+        return jsonify({"message": f"Gagal mengunduh berkas APK: {str(e)}"}), 500
+
