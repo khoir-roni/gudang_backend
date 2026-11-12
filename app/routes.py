@@ -53,7 +53,7 @@ def add_barang():
             jumlah=data['jumlah'],
             lemari=data['lemari'],
             lokasi=data['lokasi'],
-            username=data['username'],
+            username=data.get('username') or 'admin',
             tipe=data.get('tipe', 'tool'),
             tgl_kalibrasi=data.get('tgl_kalibrasi')
         )
@@ -88,7 +88,7 @@ def update_barang():
             jumlah=data['jumlah'],
             lemari=data['lemari'],
             lokasi=data['lokasi'],
-            username=data['username']
+            username=data.get('username') or 'admin'
         )
         print(f'Result: {result}')
         
@@ -109,7 +109,7 @@ def edit_barang():
             jumlah_baru=data['jumlah'],
             lemari=data['lemari'],
             lokasi=data['lokasi'],
-            username=data['username'],
+            username=data.get('username') or 'admin',
             tipe=data.get('tipe', 'tool'),
             tgl_kalibrasi=data.get('tgl_kalibrasi')
         )
